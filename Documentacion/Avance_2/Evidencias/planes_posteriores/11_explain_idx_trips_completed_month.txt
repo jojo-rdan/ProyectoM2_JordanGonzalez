@@ -1,0 +1,18 @@
+Fuente: plan de EXPLAIN pegado por el estudiante; transcripción completa.
+Limit  (cost=16263.43..16263.46 rows=12 width=200) (actual time=38.938..38.940 rows=12 loops=1)
+  Buffers: shared hit=6069
+  ->  Sort  (cost=16263.43..16482.22 rows=87514 width=200) (actual time=38.936..38.937 rows=12 loops=1)
+        Sort Key: (date_trunc('month'::text, trips.departure_datetime)) DESC
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=6069
+        ->  WindowAgg  (cost=0.29..14257.19 rows=87514 width=200) (actual time=3.196..38.904 rows=25 loops=1)
+              Buffers: shared hit=6069
+              ->  WindowAgg  (cost=0.29..10319.06 rows=87514 width=96) (actual time=1.762..38.730 rows=25 loops=1)
+                    Buffers: shared hit=6069
+                    ->  GroupAggregate  (cost=0.29..8787.57 rows=87514 width=80) (actual time=0.371..38.653 rows=25 loops=1)
+                          Group Key: date_trunc('month'::text, trips.departure_datetime)
+                          Buffers: shared hit=6069
+                          ->  Index Scan using idx_trips_completed_month on trips  (cost=0.29..6256.07 rows=100000 width=20) (actual time=0.029..24.490 rows=100000 loops=1)
+                                Buffers: shared hit=6069
+Planning Time: 0.212 ms
+Execution Time: 38.991 ms

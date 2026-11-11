@@ -1,0 +1,15 @@
+﻿tabla,indice,origen
+deliveries,deliveries_pkey,unique/PK
+deliveries,deliveries_tracking_number_key,unique
+deliveries,idx_deliveries_status,esquema inicial
+drivers,drivers_employee_code_key,unique
+drivers,drivers_license_number_key,unique
+drivers,drivers_pkey,unique/PK
+maintenance,maintenance_pkey,unique/PK
+routes,routes_pkey,unique/PK
+routes,routes_route_code_key,unique
+trips,idx_trips_departure,esquema inicial
+trips,trips_pkey,unique/PK
+vehicles,idx_vehicles_status,esquema inicial
+vehicles,vehicles_license_plate_key,unique
+vehicles,vehicles_pkey,unique/PK

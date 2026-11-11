@@ -1,0 +1,10 @@
+Fuente: plan pegado por el estudiante; extracto de nodos relevantes.
+Execution Time: 57.348 ms
+Buffers: shared hit=1143
+Hash Join ... (v.vehicle_id = t.vehicle_id) ... rows=200
+HashAggregate ... Group Key: t_1.vehicle_id ... rows=200
+Hash Join ... (t_1.route_id = r.route_id) ... rows=100000
+Seq Scan on trips t_1 ... rows=100000 ... Buffers: shared hit=1040
+HashAggregate ... Group Key: m_1.vehicle_id ... rows=200
+Seq Scan on maintenance m_1 ... rows=5000 ... Buffers: shared hit=100
+No aparece idx_trips_vehicle_id en el plan de Query 9 corregida.

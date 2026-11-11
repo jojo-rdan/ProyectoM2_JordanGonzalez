@@ -1,0 +1,14 @@
+Fuente: plan pegado por el estudiante durante el Avance #2; extracto de nodos relevantes.
+Execution Time: 115.588 ms
+Buffers: shared hit=7643
+Parallel Seq Scan on deliveries d ... rows=133333 loops=3 ... shared hit=7240
+Parallel Hash Join ... Hash Cond: (d.trip_id = t.trip_id)
+Bitmap Index Scan on idx_trips_departure ... rows=5400
+No aparece idx_deliveries_trip_id en el plan de Query 4.
+
+Prueba adicional SELECT ... FROM deliveries WHERE trip_id = 1:
+Index Scan using idx_deliveries_trip_id on deliveries  (cost=0.42..8.49 rows=4 width=27) (actual time=0.012..0.014 rows=4 loops=1)
+  Index Cond: (trip_id = 1)
+  Buffers: shared hit=4
+Planning Time: 0.137 ms
+Execution Time: 0.029 ms

@@ -1,0 +1,10 @@
+﻿query,version,execution_time_ms,observaciones
+1,original,0.140,medición histórica única
+2,original,0.131,medición histórica única
+3,original,30.702,medición histórica única
+4,original,115.901,medición histórica única
+5,original,44.092,medición histórica única
+7,original,91.673,medición histórica única
+9,original con duplicación,1510.417,medición histórica única
+11,original,102.155,medición histórica única
+9,corregida,57.661,mejora lógica; no confundir con índice

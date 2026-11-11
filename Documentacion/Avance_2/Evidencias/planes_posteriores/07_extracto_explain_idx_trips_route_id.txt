@@ -1,0 +1,10 @@
+Fuente: plan pegado por el estudiante; extracto de nodos relevantes.
+Execution Time: 82.750 ms
+Buffers: shared hit=1041
+Limit ... rows=10
+Sort ... Sort Method: top-N heapsort Memory: 27kB
+HashAggregate ... rows=50 ... Group Key: r.route_id
+Hash Join ... rows=100000 ... Hash Cond: (t.route_id = r.route_id)
+Seq Scan on trips t ... rows=100000 ... Buffers: shared hit=1040
+Seq Scan on routes r ... rows=50 ... Buffers: shared hit=1
+No aparece idx_trips_route_id en el plan de Query 7.

@@ -1,0 +1,5 @@
+﻿vehicle_type,cantidad_vehiculos,viajes_totales,kilometros_totales,costo_total_mantenimiento,costo_por_km,costo_promedio_por_mantenimiento
+Van,80,40000,1842566.63,1173019417.75,636.62,586509.71
+Camión Mediano,40,20000,938317.36,587655609.52,626.29,587655.61
+Motocicleta,60,30000,1425888.46,879484905.06,616.80,586323.27
+Camión Grande,20,10000,494714.53,291983285.15,590.21,583966.57

@@ -1,0 +1,6 @@
+﻿query,index,metodologia,mediana_o_referencia_antes_ms,mediana_despues_ms,reduccion_observada_pct,indice_usado_en_query,explain_original_ms,explain_posterior_ms
+4,idx_deliveries_trip_id,"Línea base histórica: una ejecución, no cinco",115.901,102.567,11.50,false,115.901,115.588
+5,idx_trips_driver_id,5 vs 5,53.856,60.106,-11.61,false,44.092,43.678
+7,idx_trips_route_id,5 vs 5,80.424,77.083,4.15,false,91.673,82.750
+9,idx_trips_vehicle_id,"5 vs 5, Q9 corregida",57.756,54.078,6.37,false,57.661,57.348
+11,idx_trips_completed_month,5 vs 5,79.564,41.313,48.08,true,102.155,38.991

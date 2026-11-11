@@ -1,0 +1,8 @@
+Fuente: plan pegado por el estudiante; extracto de nodos relevantes.
+Execution Time: 43.678 ms
+Buffers: shared hit=1045
+HashAggregate ... rows=400 ... Group Key: d.driver_id
+Hash Right Join ... rows=100000 ... Hash Cond: (t.driver_id = d.driver_id)
+Seq Scan on trips t ... rows=100000 ... Buffers: shared hit=1040
+Seq Scan on drivers d ... rows=400 ... Buffers: shared hit=5
+No aparece idx_trips_driver_id en el plan de Query 5.
