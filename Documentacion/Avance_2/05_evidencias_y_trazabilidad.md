@@ -17,7 +17,7 @@ Las capturas fueron aportadas por el estudiante y están copiadas **sin edición
 | 9 | [Original](Evidencias/antes/09_costos_mantenimiento_original.png), [corregida](Evidencias/antes/09_costos_mantenimiento_corregida.png) | [Original](Evidencias/antes/09_explain_antes.png), [corregida](Evidencias/antes/09_explain_corregida.png) |
 | 11 | [Tendencias](Evidencias/antes/11_tendencias_mensuales.png) | [EXPLAIN](Evidencias/antes/11_explain_antes.png) |
 
-**Índices posteriores:** consultar [planes textuales/extractos](Evidencias/planes_posteriores/) y [`Datos/benchmarks_5_indices_repeticiones.csv`](Datos/benchmarks_5_indices_repeticiones.csv). No se recibieron capturas de pantalla posteriores a los cinco índices.
+**Índices posteriores:** consultar [planes textuales/extractos](Evidencias/planes_posteriores/) y [`Datos/benchmarks_5_indices_repeticiones.csv`](Datos/benchmarks_5_indices_repeticiones.csv). También están disponibles las capturas del [plan posterior de Q4](Evidencias/planes_posteriores/04_explain_despues_indice.png), la [búsqueda selectiva por `trip_id`](Evidencias/planes_posteriores/04_indice_busqueda_selectiva.png) y el [plan posterior de Q11](Evidencias/planes_posteriores/11_explain_despues_indice.png).
 
 ## Valores cuyo origen debe mantenerse diferenciado
 
@@ -32,11 +32,8 @@ Las capturas fueron aportadas por el estudiante y están copiadas **sin edición
 
 ## Archivos adicionales sugeridos antes de entrega
 
-- `Evidencias/despues/04_explain_despues_indice.png`
 - `Evidencias/despues/05_explain_despues_indice.png`
 - `Evidencias/despues/07_explain_despues_indice.png`
 - `Evidencias/despues/09_explain_despues_indice.png`
-- `Evidencias/despues/11_explain_despues_indice.png`
-- `Evidencias/despues/04_indice_busqueda_selectiva.png`
 
-Estos archivos **no se incluyen** porque no fueron suministrados como capturas. No reemplazar evidencias ausentes con imágenes fabricadas.
+Estos tres archivos pendientes **no se incluyen** porque no fueron suministrados como capturas. No reemplazar evidencias ausentes con imágenes fabricadas.

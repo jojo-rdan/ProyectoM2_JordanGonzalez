@@ -1,0 +1,12 @@
+# Entorno reproducible validado con Python 3.14.
+# Instalar desde la raiz del repositorio con:
+#   python -m pip install -r requirements.txt
+
+Faker==40.44.0
+ipykernel==7.4.0
+jupyterlab==4.6.5
+matplotlib==3.11.2
+numpy==2.5.4
+pandas==3.1.0
+psycopg2-binary==2.9.13
+python-dotenv==1.2.4

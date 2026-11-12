@@ -62,7 +62,9 @@ La estructura de referencia, respetando las carpetas existentes del proyecto, es
 FleetLogix/
 ├── README.md                         # Presentación general (este archivo)
 ├── README_ETAPA4.md                  # Guía de generación, carga y validaciones
+├── requirements.txt                  # Dependencias Python fijadas
 ├── Scripts/
+│   ├── 00_create_schema.sql           # Esquema relacional para una base nueva
 │   ├── 01_data_generation.py         # Datos maestros (archivo existente)
 │   ├── 02_generate_transactions.py   # Viajes, entregas y mantenimientos
 │   ├── 03_load_all.py                # Carga controlada a PostgreSQL
@@ -95,7 +97,7 @@ Las carpetas `data/` y `logs/` son salidas locales: no es necesario versionar ar
 
 ## Requisitos y uso responsable
 
-**Entorno utilizado:** PostgreSQL 17, Python 3.14 en el equipo de trabajo y DBeaver. Los scripts del Avance #1 declaran compatibilidad con Python 3.10+ y las dependencias `faker`, `pandas`, `numpy`, `psycopg2-binary` y `python-dotenv`.
+**Entorno utilizado:** PostgreSQL 17, Python 3.14 en el equipo de trabajo y DBeaver. Las versiones validadas de las dependencias de scripts y notebook están fijadas en [`requirements.txt`](requirements.txt).
 
 Para ejecutar una instalación nueva, revisar primero [README_ETAPA4.md](README_ETAPA4.md). **No volver a cargar CSV en la base ya poblada**: el cargador está diseñado para una carga controlada sobre tablas vacías.
 

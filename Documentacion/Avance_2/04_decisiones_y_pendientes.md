@@ -21,7 +21,7 @@
 ## Pendientes — para declarar cierre total del Avance #2
 
 - [ ] **Benchmark final homogéneo de las ocho consultas** con cinco ejecuciones por query en el mismo estado final de índices; registrar fecha/configuración y Q9 corregida. Las primeras mediciones ya documentadas no suplen esta prueba.
-- [ ] Exportar capturas finales **después** de cada índice o plan pertinente; se recibieron planes posteriores como texto, pero no capturas de esos resultados.
+- [ ] Completar las capturas finales posteriores de Q5, Q7 y Q9. Ya se conservaron capturas posteriores para Q4, su búsqueda selectiva y Q11; los demás planes posteriores solo están disponibles como texto.
 - [ ] Verificar la prueba selectiva `WHERE driver_id = 384`, sugerida para el segundo índice; no hay resultado documentado.
 - [ ] Decidir de manera justificada qué índices conservar/retirar **en copia de prueba**; no tocar prematuramente la base original.
 - [ ] Revisar la rúbrica académica para verificar notebook, visualizaciones, entrega y formato exigidos; este paquete se limita a **documentación técnica, SQL y evidencias disponibles**.

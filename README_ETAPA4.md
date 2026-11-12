@@ -10,7 +10,7 @@ Este documento describe el flujo de **generación de datos sintéticos, carga co
 
 - Base de datos: **PostgreSQL 17**, `fleetlogix_db`, esquema `public`.
 - Herramientas de trabajo: **Python 3.14** en el equipo del proyecto (scripts declarados para Python 3.10+), **DBeaver** y Jupyter Notebook.
-- Bibliotecas del flujo Python: `faker`, `pandas`, `numpy`, `psycopg2-binary`, `python-dotenv`.
+- Bibliotecas del flujo Python y del notebook: `faker`, `pandas`, `numpy`, `psycopg2-binary`, `python-dotenv`, `matplotlib`, `ipykernel` y `jupyterlab`.
 - Estructura de referencia: scripts en `Scripts/`, resultados locales en `data/` y logs en `logs/`.
 
 Ejemplo de preparación **en un entorno nuevo**, desde la raíz del repositorio (PowerShell):
@@ -18,16 +18,22 @@ Ejemplo de preparación **en un entorno nuevo**, desde la raíz del repositorio 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install faker pandas numpy psycopg2-binary python-dotenv
+python -m pip install -r requirements.txt
 ```
 
-La instalación anterior es una referencia de dependencias conocidas; si el repositorio incluye un archivo `requirements.txt` actualizado, utilizarlo como fuente principal.
+`requirements.txt` fija las versiones validadas en el entorno del proyecto para que scripts y notebook puedan reproducirse con el mismo conjunto de bibliotecas.
 
 ## 2. Flujo de trabajo reproducible
 
 ### 2.1. Esquema relacional
 
-Crear previamente las seis tablas a partir del DDL del proyecto, con sus claves primarias, foráneas y restricciones. **No volver a ejecutar `CREATE TABLE` sobre las tablas existentes**. El esquema contiene:
+Crear previamente las seis tablas con `Scripts/00_create_schema.sql`, que reproduce las columnas, tipos, claves, valores predeterminados e índices base validados en PostgreSQL. Puede abrirse y ejecutarse desde DBeaver o, en una base nueva y vacía, mediante:
+
+```powershell
+psql -d fleetlogix_db -f Scripts/00_create_schema.sql
+```
+
+**No volver a ejecutar `CREATE TABLE` sobre las tablas existentes.** El esquema contiene:
 
 | Tabla | Filas validadas | Descripción |
 |---|---:|---|
