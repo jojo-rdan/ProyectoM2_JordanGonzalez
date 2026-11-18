@@ -1,116 +1,101 @@
-# FleetLogix | Proyecto Integrador — Módulo 2
+# FleetLogix — Proyecto Integrador · Módulo 2
 
-**Ingeniería y análisis de datos para un caso de logística de última milla.**  
-**Tecnologías:** PostgreSQL 17 · Python · SQL · DBeaver · Jupyter Notebook
+**Pipeline de datos logísticos, análisis SQL, Data Warehouse y arquitectura AWS.**  
+Proyecto académico con **datos sintéticos**. Los servicios AWS del Avance #4 están **diseñados y simulados localmente, no desplegados**.
 
-FleetLogix es un proyecto académico que simula las operaciones de una empresa de transporte y entregas en **Bogotá, Medellín, Cali, Barranquilla y Cartagena**. Su propósito es diseñar una base de datos relacional, generar y validar datos consistentes, responder preguntas de negocio con SQL y medir el efecto de optimizaciones sobre consultas analíticas.
+## Resumen de los cuatro avances
 
-> **Nota sobre los datos:** todas las personas, vehículos, entregas, distancias y costos generados para este ejercicio son **sintéticos**. Los resultados ilustran técnicas de ingeniería y análisis de datos, no métricas reales de una empresa.
+| Avance | Entregable | Resultado / alcance |
+|---|---|---|
+| **#1 — PostgreSQL** | Modelo relacional, generación y carga de datos | 6 tablas; **505.650 registros** sintéticos, integridad validada |
+| **#2 — SQL y rendimiento** | Consultas, EXPLAIN ANALYZE y optimización | 8 consultas analizadas, 5 índices evaluados y corrección de Query 9 |
+| **#3 — Snowflake DWH** | Modelo estrella, ETL Python, SCD2 y auditoría | **400.000 hechos**, 6 dimensiones, conciliaciones e idempotencia validadas |
+| **#4 — AWS Cloud** | Arquitectura, diagrama, 4 Lambda y monitoreo | **Diseño + demostración local**, sin infraestructura desplegada |
 
-## Estado del proyecto
+**Resultados DWH reportados y validados en el entorno académico:** 100.000 viajes, 400.000 entregas; **4.701.486,980 km** y **633.064,820 L** asignados sin duplicar métricas; **6.270.850.032,24 COP de ingresos sintéticos**, calculados con `SYNTHETIC_REVENUE_V1`. **No representan facturación real.**
 
-| Componente | Estado documentado |
-|---|---|
-| Modelo relacional en PostgreSQL (seis tablas y relaciones) | Completado |
-| Generación, carga y validaciones de integridad | Completado · Avance #1 |
-| Análisis de ocho consultas SQL seleccionadas | Completado · Avance #2 |
-| Experimentos con cinco índices y `EXPLAIN (ANALYZE, BUFFERS)` | Completado · Avance #2 |
-| Corrección de la consulta de mantenimiento por kilómetro | Completado · Query 9 |
-| Benchmark final homogéneo de las ocho consultas y entregables adicionales de la rúbrica | Pendiente de cierre |
+## Acceso directo a las entregas
 
-## Datos y modelo
+| Etapa | Documentación | Código / cuaderno |
+|---|---|---|
+| 1 | [Informe del Avance #1](Documentacion/Avance_1/Informe_Avance_1_FleetLogix.pdf) · [Guía de carga](README_ETAPA4.md) | [Scripts PostgreSQL](Scripts/) · [Notebook generación](Notebooks/Avance_1_DataGeneration.ipynb) |
+| 2 | [Índice y evidencias](Documentacion/Avance_2/README_AVANCE_2.md) | [Consultas y benchmarks](Scripts/Avance_2/) |
+| 3 | [Cierre técnico y limitaciones](Documentacion/Avance_3/README_CIERRE.md) | [ETL y SQL](Scripts/Avance_3/) · [Notebook DWH](Notebooks/Avance_3_DataWarehouse.ipynb) |
+| 4 | [PDF arquitectura AWS](Documentacion/Avance_4/ARQUITECTURA_TECNICA.pdf) · [Matriz de requisitos](Documentacion/Avance_4/MATRIZ_REQUISITOS.md) | [Diagrama editable](Documentacion/Avance_4/arquitectura_aws.drawio) · [Lambda](Scripts/Avance_4/lambda_functions/) · [Notebook Cloud](Notebooks/Avance_4_CloudArchitecture.ipynb) |
 
-La base de trabajo se denomina `fleetlogix_db` y utiliza el esquema `public`.
+**Diagrama del Avance #4:** [PNG](Documentacion/Avance_4/arquitectura_aws.png) · [Descripción técnica editable](Documentacion/Avance_4/ARQUITECTURA_TECNICA.md).  
+**API de ejemplo:** [Colección Postman](Postman/FleetLogix_API.postman_collection.json).
 
-| Tabla | Filas | Función |
-|---|---:|---|
-| `vehicles` | 200 | Vehículos, capacidad y tipo |
-| `drivers` | 400 | Conductores y licencias |
-| `routes` | 50 | Origen, destino y distancia de las rutas |
-| `trips` | 100.000 | Viajes, fechas, combustible y peso transportado |
-| `deliveries` | 400.000 | Entregas relacionadas con los viajes |
-| `maintenance` | 5.000 | Historial y costos de mantenimiento |
-| **Total** | **505.650** | **Registros sintéticos** |
-
-**Relaciones principales:** `vehicles → trips`, `drivers → trips`, `routes → trips`, `trips → deliveries` y `vehicles → maintenance` (relaciones uno a muchos). El modelo incorpora claves primarias, foráneas e índices básicos.
-
-## Principales hallazgos
-
-### Integridad y distribución
-
-La carga masiva fue validada en el entorno local y las comprobaciones efectuadas no identificaron errores de integridad referencial ni inconsistencias en las reglas sintéticas evaluadas. La simulación establece **500 viajes por vehículo**, **250 por conductor** y **25 mantenimientos por vehículo**. Esta uniformidad limita el análisis comparativo de productividad.
-
-### Query 9: corrección lógica antes de optimizar
-
-La consulta original relacionaba simultáneamente los viajes y mantenimientos de cada vehículo antes de agregarlos. Esto generaba **2.500.000 filas intermedias**, con kilómetros y costos artificialmente multiplicados.
-
-Se sustituyó por una consulta que **agrega viajes y mantenimientos por separado** y después combina los resultados. En dos planes registrados, el tiempo pasó de **1.510,417 ms a 57,661 ms** (reducción observada aproximada del **96,18 %**). Esta mejora corresponde a la **corrección del SQL**, no a la creación de un índice.
-
-### Query 11: índice mensual usado por PostgreSQL
-
-Se creó el índice parcial de expresión `idx_trips_completed_month` sobre `DATE_TRUNC('month', departure_datetime)` para viajes `completed`.
-
-La mediana de cinco ejecuciones pasó de **79,564 ms a 41,313 ms** (**48,08 % menos**). El plan posterior confirmó un `Index Scan` usando ese índice y la eliminación del ordenamiento inicial en disco. Los otros cuatro índices experimentales **no fueron utilizados por sus consultas analíticas principales**; uno de ellos sí mostró utilidad en una búsqueda selectiva.
-
-> Las cifras corresponden al entorno local y las pruebas registradas. No son una garantía de rendimiento en producción. Los detalles, cautelas metodológicas y resultados completos están en la documentación del Avance #2.
-
-## Organización del repositorio
-
-La estructura de referencia, respetando las carpetas existentes del proyecto, es:
+## Estructura del repositorio
 
 ```text
-FleetLogix/
-├── README.md                         # Presentación general (este archivo)
-├── README_ETAPA4.md                  # Guía de generación, carga y validaciones
-├── requirements.txt                  # Dependencias Python fijadas
+.
 ├── Scripts/
-│   ├── 00_create_schema.sql           # Esquema relacional para una base nueva
-│   ├── 01_data_generation.py         # Datos maestros (archivo existente)
-│   ├── 02_generate_transactions.py   # Viajes, entregas y mantenimientos
-│   ├── 03_load_all.py                # Carga controlada a PostgreSQL
-│   └── Avance_2/                     # Consultas, índices y auditorías SQL
+│   ├── 00_create_schema.sql          # Esquema PostgreSQL del Avance 1
+│   ├── 01_data_generation.py
+│   ├── 02_generate_transactions.py
+│   ├── 03_load_all.py
+│   ├── Avance_2/                    # Análisis, índices y benchmarks
+│   ├── Avance_3/                    # Transformaciones, cargas, auditoría y vistas
+│   └── Avance_4/                    # 4 handlers Lambda y prueba local
 ├── Documentacion/
-│   ├── ...                            # Documentos existentes del Avance #1
-│   └── Avance_2/
-│       ├── README_AVANCE_2.md
-│       ├── 01_contexto_y_alcance.md
-│       ├── 02_resultados_y_hallazgos.md
-│       ├── 03_metodologia_y_benchmarks.md
-│       ├── 04_decisiones_y_pendientes.md
-│       ├── 05_evidencias_y_trazabilidad.md
-│       ├── Datos/                       # CSV de resultados y benchmarking
-│       └── Evidencias/                  # Capturas y planes de ejecución
-├── Notebooks/                         # Cuadernos del proyecto, si están integrados
-├── data/                              # CSV sintéticos generados localmente
-└── logs/                              # Registros locales de ejecución
+│   ├── Avance_1/
+│   ├── Avance_2/
+│   ├── Avance_3/
+│   └── Avance_4/                    # PDF, diagrama y presupuesto AWS
+├── Notebooks/
+├── Postman/
+├── Evidencias/                      # Capturas históricas
+├── .env.example
+├── requirements.txt
+├── requirements-cloud.txt
+└── README.md
 ```
 
-Las carpetas `data/` y `logs/` son salidas locales: no es necesario versionar archivos voluminosos ni datos sensibles para documentar el proyecto.
+Los directorios locales `data/`, `logs/` y `.venv/` están ignorados en Git; se generan en el equipo durante las ejecuciones.
 
-## Documentación y navegación
+## Uso y validación rápida
 
-- [Generación, carga y validación — Etapa 4 / Avance #1](README_ETAPA4.md)
-- [Índice técnico del Avance #2](Documentacion/Avance_2/README_AVANCE_2.md)
-- [Resultados y hallazgos de las ocho consultas](Documentacion/Avance_2/02_resultados_y_hallazgos.md)
-- [Metodología y mediciones de rendimiento](Documentacion/Avance_2/03_metodologia_y_benchmarks.md)
-- [Decisiones técnicas y trabajo pendiente](Documentacion/Avance_2/04_decisiones_y_pendientes.md)
+**Entorno de referencia:** Python 3.14, PostgreSQL 17, DBeaver y Snowflake. Para una instalación local nueva:
 
-## Requisitos y uso responsable
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
 
-**Entorno utilizado:** PostgreSQL 17, Python 3.14 en el equipo de trabajo y DBeaver. Las versiones validadas de las dependencias de scripts y notebook están fijadas en [`requirements.txt`](requirements.txt).
+Para trabajar con Snowflake o con los SDK de AWS, instalar también las dependencias opcionales:
 
-Para ejecutar una instalación nueva, revisar primero [README_ETAPA4.md](README_ETAPA4.md). **No volver a cargar CSV en la base ya poblada**: el cargador está diseñado para una carga controlada sobre tablas vacías.
+```powershell
+python -m pip install -r requirements-cloud.txt
+```
 
-Para analizar SQL y los resultados del Avance #2, consultar [su guía principal](Documentacion/Avance_2/README_AVANCE_2.md). Los scripts de índices se conservan como evidencia del experimento y **no deben reejecutarse innecesariamente** sobre la base actual.
+Copiar `.env.example` a `.env` y completar **solo en el equipo local** las variables de PostgreSQL y Snowflake. La autenticación Snowflake actual para las pruebas manuales se realiza por **OAuth en navegador**; los scripts no están preparados para una ejecución nocturna desatendida.
 
-**Seguridad:** mantener `.env`, contraseñas, entornos virtuales, respaldos privados y datos reales fuera del control de versiones. Se recomienda revisar `git status` antes de cualquier `git add`.
+**Prueba local del Avance #4 (no requiere AWS):**
 
-## Próximos pasos
+```powershell
+python Scripts/Avance_4/test_lambda_logic.py
+```
 
-1. Ejecutar un benchmark final homogéneo de las ocho consultas en el estado final de índices.
-2. Completar las capturas posteriores y los datos de trazabilidad aún pendientes.
-3. Finalizar los cuadernos, visualizaciones y demás entregables exigidos por la rúbrica académica.
+Resultado esperado: `PRUEBA LOCAL AWS COMPLETA: OK`. Simula evento recibido, estado actual, ETA, alerta, archivo histórico y evento duplicado.
+
+**Consultas finales del Avance #3 en Snowsight:**
+
+1. `Scripts/Avance_3/16_finalize_analytics.sql` — crea vistas seguras y snapshots agregados.
+2. `Scripts/Avance_3/18_validacion_cierre.sql` — verifica hechos, agregados y vistas.
+
+Estos dos SQL forman parte del paquete de cierre, pero **su ejecución sobre la cuenta real no está confirmada en las evidencias compartidas**. No los presentes como ejecutados sin revisar sus resultados. Los roles de SALES/OPERATIONS son opcionales y requieren administración: `17_roles_opcionales.sql`.
+
+**Precaución:** `python Scripts/Avance_3/10_run_etl_pipeline.py --full` realiza una **recarga completa** y puede solicitar inicio de sesión Google repetidamente; no es CDC ni un job desatendido. El procedimiento de carga del Avance #1 debe usarse solamente en una base PostgreSQL vacía.
+
+## Alcance y limitaciones para la entrega
+
+- **Avance #3:** pipeline manual auditado (9/9 pasos), SCD2 e idempotencia validados. El detector de deltas identificó correctamente el caso sin cambios; el MERGE de delta no vacío **no ha sido probado en integración aislada**, y la extracción desde PostgreSQL sigue siendo completa. No se configuró programación nocturna ni autenticación de servicio. La retención Snowflake se configuró en **1 día**, no 30.
+- **Avance #4:** RDS PostgreSQL, DynamoDB, S3, API Gateway, Lambda, EventBridge, SNS, IAM y CloudWatch son un **diseño propuesto**, con una prueba local de cuatro funciones Lambda. **No hay migración real a RDS, API pública, backups activados ni servicios AWS desplegados**.
+- **Costo AWS:** **US$23,10/mes** en un escenario teórico pequeño de Ohio, condicionado al volumen y a las hipótesis documentadas; no es una factura ni una cotización garantizada. Consultar el [presupuesto](Documentacion/Avance_4/presupuesto_aws.csv).
+- **Seguridad:** no publicar contraseñas, `.env`, archivos de clientes/direcciones ni claves privadas. Todo el conjunto de datos operacional es sintético.
 
 ---
 
-*Proyecto Integrador de Data Science · Módulo 2 · Actualización documental: noviembre de 2026.*
+*Proyecto Integrador de Data Science · Módulo 2 · Estado documental: 18 de noviembre de 2026.*
