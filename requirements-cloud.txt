@@ -1,0 +1,10 @@
+# Complemento opcional de requirements.txt para los Avances #3 y #4.
+# Se recomienda Python 3.11-3.14 y validar compatibilidad del conector
+# con la versión local. Las bibliotecas del Avance 4 no se necesitan
+# para ejecutar la prueba local: test_lambda_logic.py.
+#
+# Snowflake Python Connector: interfaz usada para pruebas manuales OAuth.
+snowflake-connector-python>=4,<6
+
+# SDK AWS: solo para handlers en despliegue real; no despliega recursos.
+boto3>=1.35,<2
