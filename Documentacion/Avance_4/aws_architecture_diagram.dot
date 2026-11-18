@@ -1,0 +1,23 @@
+digraph FleetLogix {
+  graph [rankdir=LR, fontname="DejaVu Sans", label="FleetLogix · Arquitectura propuesta AWS (Avance #4)\nPiloto académico - sin recursos desplegados", fontsize=19, labelloc=t, pad=0.30, nodesep=0.50, ranksep=0.65, bgcolor="white"];
+  node [shape=box, style="rounded,filled", color="#B8C6D9", fillcolor="#F4F7FB", fontname="DejaVu Sans", fontsize=11, margin="0.17,0.10"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#516B8A", arrowsize=0.7];
+  mobile [label="App móvil\nconductores", fillcolor="#E9F3FF"];
+  api [label="API Gateway\nHTTP API", fillcolor="#DCEBFF"];
+  lambda [label="AWS Lambda\nvalidar · ETA · desviación\nregistrar evento", fillcolor="#FFF1D9"];
+  ddb [label="DynamoDB\nestado actual de entregas", fillcolor="#E5F4E7"];
+  s3 [label="Amazon S3\neventos por fecha\n/año/mes/día", fillcolor="#E5F4E7"];
+  cw [label="CloudWatch\nmétricas · logs · alarmas", fillcolor="#F4E9FF"];
+  eb [label="EventBridge\nproceso programado", fillcolor="#FFF1D9"];
+  batch [label="Lambda batch\nconciliación", fillcolor="#FFF1D9"];
+  rds [label="Amazon RDS\nPostgreSQL privado\nbackup automático", fillcolor="#E5F4E7"];
+  local [label="PostgreSQL local\n(migración inicial)", fillcolor="#F1F1F1"];
+  mobile -> api -> lambda;
+  lambda -> ddb [label="estado"];
+  lambda -> s3 [label="histórico"];
+  lambda -> cw [label="logs"];
+  eb -> batch -> rds;
+  s3 -> batch [label="lectura por lotes"];
+  local -> rds [label="pg_dump / restore\nvalidar migración", style=dashed];
+  batch -> cw [label="resultado"];
+}
