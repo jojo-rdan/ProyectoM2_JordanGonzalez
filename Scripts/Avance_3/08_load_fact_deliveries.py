@@ -17,7 +17,7 @@ import json
 import os
 import re
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from hashlib import sha256
 from pathlib import Path
 
@@ -32,6 +32,12 @@ EXPECTED_ROWS = 400_000
 EXPECTED_TRIPS = 100_000
 EXPECTED_DISTANCE = Decimal("4701486.980000")
 EXPECTED_FUEL = Decimal("633064.820000")
+EXPECTED_REVENUE = Decimal("6270850032.24")
+REVENUE_POLICY = "SYNTHETIC_REVENUE_V1"
+REVENUE_BASE_COP = Decimal("7000")
+REVENUE_PER_KG_COP = Decimal("20")
+REVENUE_PER_KM_COP = Decimal("300")
+REVENUE_QUANT = Decimal("0.01")
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 SHA_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -107,6 +113,9 @@ def validate_local() -> int:
         or audit.get("processed_trip_count") != EXPECTED_TRIPS
         or Decimal(str(audit.get("allocated_distance_km", "-1"))) != EXPECTED_DISTANCE
         or Decimal(str(audit.get("allocated_fuel_liters", "-1"))) != EXPECTED_FUEL
+        or audit.get("revenue_policy") != REVENUE_POLICY
+        or audit.get("revenue_is_synthetic") is not True
+        or Decimal(str(audit.get("revenue_total_estimated_cop", "-1"))) != EXPECTED_REVENUE
     ):
         raise ValueError("La auditoría no coincide con la línea base verificada")
 
@@ -116,6 +125,7 @@ def validate_local() -> int:
     total = 0
     distance = Decimal(0)
     fuel = Decimal(0)
+    revenue_total = Decimal(0)
     print("Validando CSV de FACT_DELIVERIES localmente (sin enviar datos)...")
     with CSV_PATH.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh)
@@ -155,11 +165,10 @@ def validate_local() -> int:
                 or row["IS_ON_TIME"] not in {"TRUE", "FALSE"}
                 or (row["IS_ON_TIME"] == "TRUE") != (delivered <= scheduled)
                 or row["ALLOCATION_METHOD"] != "WEIGHT_PROPORTIONAL_V1"
-                or row["ESTIMATED_REVENUE_COP"]
-                or row["REVENUE_POLICY_VERSION"]
+                or row["REVENUE_POLICY_VERSION"] != REVENUE_POLICY
             ):
                 raise ValueError(f"Fila {total}: regla de negocio inconsistente")
-            decimal_value(row["PACKAGE_WEIGHT_KG"], "PACKAGE_WEIGHT_KG", nonnegative=False)
+            weight = decimal_value(row["PACKAGE_WEIGHT_KG"], "PACKAGE_WEIGHT_KG", nonnegative=False)
             decimal_value(row["DELIVERY_DURATION_MINUTES"], "DELIVERY_DURATION_MINUTES")
             try:
                 variance = Decimal(row["SCHEDULE_VARIANCE_MINUTES"])
@@ -167,8 +176,22 @@ def validate_local() -> int:
                 raise ValueError(f"Fila {total}: diferencia horaria no numérica") from exc
             if not variance.is_finite():
                 raise ValueError(f"Fila {total}: diferencia horaria no finita")
-            distance += decimal_value(row["ALLOCATED_DISTANCE_KM"], "ALLOCATED_DISTANCE_KM")
+            row_distance = decimal_value(row["ALLOCATED_DISTANCE_KM"], "ALLOCATED_DISTANCE_KM")
+            distance += row_distance
             fuel += decimal_value(row["ALLOCATED_FUEL_LITERS"], "ALLOCATED_FUEL_LITERS")
+            expected_row_revenue = (
+                REVENUE_BASE_COP + weight * REVENUE_PER_KG_COP
+                + row_distance * REVENUE_PER_KM_COP
+            ).quantize(REVENUE_QUANT, rounding=ROUND_HALF_UP)
+            actual_row_revenue = decimal_value(
+                row["ESTIMATED_REVENUE_COP"], "ESTIMATED_REVENUE_COP"
+            )
+            if actual_row_revenue != expected_row_revenue:
+                raise ValueError(
+                    f"Fila {total}: ingreso sintético inconsistente: "
+                    f"{actual_row_revenue} vs {expected_row_revenue}"
+                )
+            revenue_total += actual_row_revenue
             if not SHA_PATTERN.fullmatch(row["CUSTOMER_BK"]):
                 raise ValueError(f"Fila {total}: CUSTOMER_BK inválida")
             if not SHA_PATTERN.fullmatch(row["SOURCE_ROW_HASH"]) or (
@@ -177,16 +200,18 @@ def validate_local() -> int:
                 raise ValueError(f"Fila {total}: SOURCE_ROW_HASH inválido")
             if total % 100_000 == 0:
                 print(f"  Filas comprobadas: {total:,}")
-    if (total, trips, distance, fuel) != (
-        EXPECTED_ROWS, EXPECTED_TRIPS, EXPECTED_DISTANCE, EXPECTED_FUEL
+    if (total, trips, distance, fuel, revenue_total) != (
+        EXPECTED_ROWS, EXPECTED_TRIPS, EXPECTED_DISTANCE, EXPECTED_FUEL,
+        EXPECTED_REVENUE,
     ):
         raise ValueError(
             f"CSV no concilia: {total} entregas, {trips} viajes, "
-            f"{distance} km, {fuel} L"
+            f"{distance} km, {fuel} L, {revenue_total} COP"
         )
     print(
         f"CSV OK: {total:,} entregas únicas; {trips:,} viajes; "
-        f"{distance:,.6f} km; {fuel:,.6f} L"
+        f"{distance:,.6f} km; {fuel:,.6f} L; "
+        f"{revenue_total:,.2f} COP SINTÉTICOS ({REVENUE_POLICY})"
     )
     return total
 
@@ -336,18 +361,27 @@ def check_resolved(cursor, expected: int) -> None:
                 OR DRIVER_KEY IS NULL OR ROUTE_KEY IS NULL OR CUSTOMER_KEY IS NULL
             ),
             SUM(ALLOCATED_DISTANCE_KM), SUM(ALLOCATED_FUEL_LITERS),
-            COUNT_IF(ESTIMATED_REVENUE_COP IS NOT NULL OR REVENUE_POLICY_VERSION IS NOT NULL)
+            COUNT_IF(ESTIMATED_REVENUE_COP IS NULL
+                 OR REVENUE_POLICY_VERSION IS NULL
+                 OR REVENUE_POLICY_VERSION <> 'SYNTHETIC_REVENUE_V1'),
+            SUM(ESTIMATED_REVENUE_COP),
+            COUNT_IF(ESTIMATED_REVENUE_COP IS NOT NULL AND
+                 ESTIMATED_REVENUE_COP <> ROUND(
+                     7000 + PACKAGE_WEIGHT_KG * 20 + ALLOCATED_DISTANCE_KM * 300, 2))
         FROM TMP_FLEETLOGIX_FACT_RESOLVED
     """)
-    total, distinct_delivery, trips, unresolved, dist, fuel, revenue_present = cursor.fetchone()
+    (total, distinct_delivery, trips, unresolved, dist, fuel,
+     bad_revenue, total_revenue, bad_formula) = cursor.fetchone()
     print(
         f"Relaciones dimensionales: {total:,} filas; {unresolved} sin clave; "
-        f"{dist:,.6f} km; {fuel:,.6f} L"
+        f"{dist:,.6f} km; {fuel:,.6f} L; {total_revenue:,.2f} COP sintéticos"
     )
     if (
         total != expected or distinct_delivery != expected or trips != EXPECTED_TRIPS
         or unresolved != 0 or Decimal(str(dist)) != EXPECTED_DISTANCE
-        or Decimal(str(fuel)) != EXPECTED_FUEL or revenue_present != 0
+        or Decimal(str(fuel)) != EXPECTED_FUEL
+        or bad_revenue != 0 or bad_formula != 0
+        or Decimal(str(total_revenue)) != EXPECTED_REVENUE
     ):
         raise RuntimeError(
             "Las dimensiones no cubren todas las entregas o no concilian métricas. "
@@ -388,17 +422,30 @@ def check_target(cursor, expected: int) -> None:
             COUNT(*), COUNT(DISTINCT DELIVERY_ID),
             SUM(ALLOCATED_DISTANCE_KM), SUM(ALLOCATED_FUEL_LITERS),
             COUNT_IF(DATE_KEY IS NULL OR TIME_KEY IS NULL OR VEHICLE_KEY IS NULL
-                 OR DRIVER_KEY IS NULL OR ROUTE_KEY IS NULL OR CUSTOMER_KEY IS NULL)
+                 OR DRIVER_KEY IS NULL OR ROUTE_KEY IS NULL OR CUSTOMER_KEY IS NULL),
+            SUM(ESTIMATED_REVENUE_COP),
+            COUNT_IF(ESTIMATED_REVENUE_COP IS NULL
+                 OR REVENUE_POLICY_VERSION <> 'SYNTHETIC_REVENUE_V1'
+                 OR REVENUE_POLICY_VERSION IS NULL),
+            COUNT_IF(ESTIMATED_REVENUE_COP IS NOT NULL AND
+                 ESTIMATED_REVENUE_COP <> ROUND(
+                    7000 + PACKAGE_WEIGHT_KG * 20 + ALLOCATED_DISTANCE_KM * 300, 2))
         FROM ANALYTICS.FACT_DELIVERIES
     """)
-    total, uniques, distance, fuel, missing = cursor.fetchone()
+    (total, uniques, distance, fuel, missing,
+     revenue_total, bad_revenue, bad_formula) = cursor.fetchone()
     if (
         (total, uniques, missing) != (expected, expected, 0)
         or Decimal(str(distance)) != EXPECTED_DISTANCE
         or Decimal(str(fuel)) != EXPECTED_FUEL
+        or Decimal(str(revenue_total)) != EXPECTED_REVENUE
+        or bad_revenue != 0 or bad_formula != 0
     ):
         raise RuntimeError("La auditoría posterior al MERGE falló")
-    print(f"FACT_DELIVERIES: {total:,} entregas, {distance:,.6f} km, {fuel:,.6f} L")
+    print(
+        f"FACT_DELIVERIES: {total:,} entregas, {distance:,.6f} km, "
+        f"{fuel:,.6f} L, {revenue_total:,.2f} COP sintéticos"
+    )
 
 
 def load_to_snowflake(expected: int) -> None:

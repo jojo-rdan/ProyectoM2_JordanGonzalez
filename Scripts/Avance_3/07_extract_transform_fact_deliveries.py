@@ -7,7 +7,7 @@ Uso:
 - Escribe CSV de staging de manera atómica después de validar la extracción.
 - Reparte distancia y combustible del viaje por peso de paquete, conservando
   exactamente el total de cada viaje con seis decimales.
-- ESTIMATED_REVENUE_COP permanece sin valor: política aún no definida.
+- ESTIMATED_REVENUE_COP se deriva con SYNTHETIC_REVENUE_V1 (simulación académica).
 """
 
 import csv
@@ -38,6 +38,12 @@ BATCH_SIZE = 5_000
 ALLOC_QUANT = Decimal("0.000001")
 METRIC_QUANT = Decimal("0.001")
 ALLOC_METHOD = "WEIGHT_PROPORTIONAL_V1"
+REVENUE_POLICY = "SYNTHETIC_REVENUE_V1"
+REVENUE_BASE_COP = Decimal("7000")
+REVENUE_PER_KG_COP = Decimal("20")
+REVENUE_PER_KM_COP = Decimal("300")
+REVENUE_QUANT = Decimal("0.01")
+EXPECTED_REVENUE_COP = Decimal("6270850032.24")
 DATE_MIN = datetime(2024, 1, 1)
 DATE_MAX_EXCLUSIVE = datetime(2031, 1, 1)
 
@@ -119,6 +125,22 @@ def customer_bk(name, address):
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
+def estimate_revenue(weight_kg: Decimal, allocated_distance_km: Decimal) -> Decimal:
+    """Calcula ingresos SINTÉTICOS sobre métricas tal como se guardan en CSV/DWH.
+
+    Peso: NUMBER(18,3); distancia: NUMBER(20,6); redondeo HALF_UP
+    (equivalente al ROUND de valores positivos de Snowflake).
+    """
+    saved_weight = weight_kg.quantize(METRIC_QUANT, rounding=ROUND_HALF_UP)
+    saved_distance = allocated_distance_km.quantize(ALLOC_QUANT, rounding=ROUND_HALF_UP)
+    revenue = (
+        REVENUE_BASE_COP
+        + saved_weight * REVENUE_PER_KG_COP
+        + saved_distance * REVENUE_PER_KM_COP
+    )
+    return revenue.quantize(REVENUE_QUANT, rounding=ROUND_HALF_UP)
+
+
 def make_row_hash(record):
     payload = json.dumps(
         {key: record[key] for key in CSV_COLUMNS if key != "SOURCE_ROW_HASH"},
@@ -190,6 +212,7 @@ def transform_trip(raw_rows):
             Decimal(str((delivered - scheduled).total_seconds())) / Decimal(60)
         ).quantize(METRIC_QUANT, rounding=ROUND_HALF_UP)
 
+        estimated_revenue = estimate_revenue(weight, assigned_distance)
         record = {
             "DELIVERY_ID": str(delivery_id),
             "TRIP_ID": str(trip_id),
@@ -212,8 +235,8 @@ def transform_trip(raw_rows):
             "ALLOCATED_DISTANCE_KM": format(assigned_distance, ".6f"),
             "ALLOCATED_FUEL_LITERS": format(assigned_fuel, ".6f"),
             "ALLOCATION_METHOD": ALLOC_METHOD,
-            "ESTIMATED_REVENUE_COP": "",
-            "REVENUE_POLICY_VERSION": "",
+            "ESTIMATED_REVENUE_COP": format(estimated_revenue, ".2f"),
+            "REVENUE_POLICY_VERSION": REVENUE_POLICY,
         }
         record["SOURCE_ROW_HASH"] = make_row_hash(record)
         records.append(record)
@@ -251,6 +274,7 @@ def main():
         processed_trips = 0
         distance_sum = Decimal(0)
         fuel_sum = Decimal(0)
+        revenue_sum = Decimal(0)
         current_trip_id = None
         group = []
 
@@ -259,7 +283,7 @@ def main():
             writer.writeheader()
 
             def flush_trip():
-                nonlocal processed_deliveries, processed_trips, distance_sum, fuel_sum
+                nonlocal processed_deliveries, processed_trips, distance_sum, fuel_sum, revenue_sum
                 if not group:
                     return
                 records, trip_distance, trip_fuel = transform_trip(group)
@@ -268,6 +292,10 @@ def main():
                 processed_trips += 1
                 distance_sum += trip_distance
                 fuel_sum += trip_fuel
+                revenue_sum += sum(
+                    (Decimal(row["ESTIMATED_REVENUE_COP"]) for row in records),
+                    Decimal(0),
+                )
                 if processed_trips % 10_000 == 0:
                     print(f"  Viajes procesados: {processed_trips:,} | Entregas: {processed_deliveries:,}")
 
@@ -297,6 +325,12 @@ def main():
                 f"{distance_sum} km y {fuel_sum} L"
             )
 
+        if revenue_sum != EXPECTED_REVENUE_COP:
+            raise ValueError(
+                "Ingresos estimados no concilian con la simulación previa: "
+                f"{revenue_sum} COP vs {EXPECTED_REVENUE_COP} COP"
+            )
+
         # Publicamos únicamente tras completar todas las validaciones.
         os.replace(TEMP_FILE, OUTPUT_FILE)
         audit = {
@@ -312,7 +346,13 @@ def main():
             "allocated_fuel_liters": str(fuel_sum),
             "allocation_method": ALLOC_METHOD,
             "customer_key_method": "SHA256(JSON([lower(trim(name)),lower(trim(address))]))",
-            "revenue_policy": "NOT_DEFINED; revenue columns blank",
+            "revenue_policy": REVENUE_POLICY,
+            "revenue_is_synthetic": True,
+            "revenue_base_cop": str(REVENUE_BASE_COP),
+            "revenue_per_kg_cop": str(REVENUE_PER_KG_COP),
+            "revenue_per_km_cop": str(REVENUE_PER_KM_COP),
+            "revenue_total_estimated_cop": str(revenue_sum),
+            "revenue_rounding": "HALF_UP to 2 decimals per delivery",
             "source_row_hash": "SHA256 of deterministic prepared record",
             "status": "VALIDATED",
         }
@@ -324,6 +364,7 @@ def main():
         print(f"Entregas: {processed_deliveries:,} | Viajes: {processed_trips:,}")
         print(f"Distancia asignada: {distance_sum:,.6f} km")
         print(f"Combustible asignado: {fuel_sum:,.6f} L")
+        print(f"Ingresos SINTÉTICOS estimados: {revenue_sum:,.2f} COP ({REVENUE_POLICY})")
         print(f"Archivo: {OUTPUT_FILE}")
         print(f"Auditoría: {AUDIT_FILE}")
         print("Snowflake no fue modificado.")
