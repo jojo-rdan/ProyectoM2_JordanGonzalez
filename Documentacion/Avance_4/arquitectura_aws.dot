@@ -1,0 +1,30 @@
+digraph FleetLogixAWS {
+ graph [rankdir=LR, bgcolor="white", pad="0.32", nodesep="0.44", ranksep="0.60", splines=polyline, fontname="DejaVu Sans", label="FLEETLOGIX  |  Arquitectura cloud propuesta  |  AWS us-east-2", labelloc=t, fontsize=18, fontcolor="#12324C"];
+ node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=10, penwidth=1.3, margin="0.20,0.14", color="#A6C6D5", fillcolor="#ECF5FA", fontcolor="#12324C"];
+ edge [color="#54758B", penwidth=1.5, arrowsize=0.7, fontname="DejaVu Sans", fontsize=9, fontcolor="#54758B"];
+ app [label="App móvil\nconductores", fillcolor="#DFEBFF"];
+ gateway [label="API Gateway\nHTTP API + JWT", fillcolor="#DAEBFF"];
+ ingest [label="Lambda 1\nvalidar / completar", fillcolor="#E7E1FF"];
+ dynamo [label="DynamoDB\nestado actual", fillcolor="#DCF6E9"];
+ bus [label="EventBridge\neventos", fillcolor="#F4EDDC"];
+ eta [label="Lambda 2\nETA simple", fillcolor="#E7E1FF"];
+ deviation [label="Lambda 3\ndesvío", fillcolor="#E7E1FF"];
+ archive [label="Lambda 4\narchivo", fillcolor="#E7E1FF"];
+ sns [label="SNS\nalertas", fillcolor="#FFEFDE"];
+ s3 [label="S3\nhistórico por fecha", fillcolor="#DCF6E9"];
+ pg [label="PostgreSQL\nlocal", fillcolor="#ECECEC"];
+ rds [label="RDS PostgreSQL\nprivado Single-AZ", fillcolor="#DCF6E9"];
+ backup [label="Backups RDS\n7 días", fillcolor="#FFF7DA"];
+ logs [label="CloudWatch\nlogs / métricas", fillcolor="#FFF7DA"];
+ app -> gateway -> ingest -> dynamo;
+ ingest -> bus;
+ bus -> eta -> dynamo;
+ bus -> deviation -> sns;
+ bus -> archive -> s3;
+ pg -> rds [label="pg_dump / restore", style=dashed];
+ rds -> backup [style=dotted];
+ ingest -> logs [style=dotted, constraint=false];
+ eta -> logs [style=dotted, constraint=false];
+ {rank=same; eta; deviation; archive}
+ {rank=same; s3; sns; dynamo}
+}

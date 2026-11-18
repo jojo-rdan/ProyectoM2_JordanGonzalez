@@ -1,0 +1,6 @@
+PRUEBA LOCAL AWS COMPLETA: OK
+API -> DynamoDB simulado: estado final = delivered
+ETA simple: 15.0 minutos | alerta de desvío: SI
+Eventos archivados en S3 simulado: 2
+Evento repetido rechazado sin duplicación: OK
+0 conexiones AWS | 0 costos | 0 cambios a PostgreSQL/Snowflake

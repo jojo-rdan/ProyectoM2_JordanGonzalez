@@ -1,0 +1,54 @@
+{
+  "info": {
+    "name": "FleetLogix - API Eventos (diseño)",
+    "_postman_id": "fleetlogix-avance4-local-demo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Rutas previstas; requieren API AWS desplegada y token JWT. No se incluye endpoint real."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://TU_API.execute-api.us-east-2.amazonaws.com"
+    },
+    {
+      "key": "jwt_token",
+      "value": "REEMPLAZAR_TOKEN"
+    }
+  ],
+  "item": [
+    {
+      "name": "Enviar estado entregado",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"event_id\": \"ev-demo-done-101\", \"delivery_id\": \"101\", \"event_type\": \"delivery_status\", \"occurred_at\": \"2026-11-18T14:20:00Z\", \"status\": \"delivered\"}"
+        },
+        "url": "{{base_url}}/events"
+      }
+    },
+    {
+      "name": "Consultar estado actual",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "url": "{{base_url}}/deliveries/101"
+      }
+    }
+  ]
+}

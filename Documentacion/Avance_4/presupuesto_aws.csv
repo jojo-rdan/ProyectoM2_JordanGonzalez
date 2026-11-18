@@ -1,0 +1,14 @@
+Servicio,Supuesto,USD_mes
+"RDS PostgreSQL, instancia",db.t4g.micro; 730 h a USD 0.016/h,11.68
+"RDS PostgreSQL, SSD gp3",20 GiB a USD 0.115/GiB-mes,2.30
+Backups RDS,7 dias; dentro del espacio gratuito asumido,0.00
+API Gateway HTTP,"50,000 solicitudes de evento/consulta",0.05
+AWS Lambda,"200,000 invocaciones breves; margen",0.30
+DynamoDB,lecturas/escrituras y menos de 1 GB; margen,0.30
+Amazon S3,"5 GB + 50,000 PUT",0.37
+EventBridge,"50,000 eventos personalizados",0.05
+SNS,alertas poco frecuentes,0.05
+CloudWatch,"logs, metricas y alarmas; margen",2.00
+Transferencia,salida pequena a internet; margen,1.00
+Contingencia,"variacion de consumos, precios y backups",5.00
+TOTAL ESTIMADO (NO COTIZACION),Region us-east-2; sin Free Tier,23.10

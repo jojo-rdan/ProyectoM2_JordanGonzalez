@@ -1,74 +1,104 @@
-# FleetLogix — Avance #4 · Diseño de arquitectura AWS
+# FleetLogix — Avance 4: arquitectura Cloud AWS
 
-**Alcance:** propuesta académica sin despliegue de recursos. Región de referencia `us-east-2` (Ohio), una sola AZ para limitar costos; no es diseño de alta disponibilidad productiva.
+**Fecha:** 18 de noviembre de 2026  
+**Alcance:** diseño académico + demostración funcional local, **sin despliegue AWS**.  
+**Región propuesta:** `us-east-2` (Ohio), en coherencia con Snowflake FleetLogix.  
+**Objetivo:** arquitectura explicable y presupuesto teórico **menor a US$50/mes**.
 
-## Diagrama
+![Diagrama de arquitectura](arquitectura_aws.png)
 
-![Arquitectura AWS de FleetLogix](aws_architecture_diagram.png)
+## 1. Flujo en tiempo real
 
-## Flujo de datos
+1. El conductor emite `POST /events` por HTTPS. **API Gateway HTTP API** verifica JWT (Cognito u otro emisor OIDC) y limita solicitudes.
+2. **Lambda 1 (`lambda_ingest`)** valida `event_id`, entrega, estado y fecha; determina si está `delivered` y guarda **estado actual** en DynamoDB. Responde 202. `GET /deliveries/{id}` consulta ese estado: esta es la funcionalidad de actualización casi inmediata.
+3. Lambda 1 publica un evento `DeliveryEvent` en **EventBridge**, que distribuye el mensaje a tres Lambdas: ETA, desvíos y archivo.
+4. **Lambda 2 (`lambda_eta`)** calcula un ETA ilustrativo = kilómetros restantes / velocidad media, y actualiza DynamoDB.
+5. **Lambda 3 (`lambda_route_alert`)** calcula distancia al waypoint de referencia y publica un aviso en **SNS** si supera 2 km. No es navegación real ni cálculo de distancia a la ruta completa.
+6. **Lambda 4 (`lambda_archive`)** conserva el evento en **S3** como `events/AAAA/MM/DD/event_id.json`. S3 = histórico; DynamoDB = estado reciente.
+7. **CloudWatch** registra métricas y errores; las alarmas notifican a SNS. Los servicios invocan roles IAM de privilegio mínimo.
 
-1. Aplicación móvil de conductor envía evento HTTPS autenticado a **API Gateway HTTP API**.
-2. **Lambda** valida esquema, id y fecha, verifica entrega completada, calcula ETA ilustrativo o marca desvío sobre un waypoint de referencia.
-3. **DynamoDB** mantiene el estado actual por entrega (lecturas rápidas); **S3** guarda cada evento original como JSON bajo `events/YYYY/MM/DD/event_id.json`.
-4. **EventBridge** dispara una Lambda batch periódica que consolida nuevos eventos en **RDS PostgreSQL** privado, manteniendo la BD operacional como registro transaccional.
-5. **CloudWatch** recibe métricas, logs y alarmas. RDS activa backups automáticos, cifrado en reposo y acceso restringido.
+**Contrato de API:** `POST /events`, `GET /deliveries/{id}`. Respuestas JSON. La demo local comprueba POST->estado->GET, ETA, desvío, archivo y deduplicación.
 
-**Advertencia:** DynamoDB y S3 no forman una transacción distribuida. Para uso real se necesitaría control de reintentos, deduplicación por `event_id` mediante escritura condicional y reconciliación de fallos parciales. Ejemplo Lambda entregado es demostrativo, no production ready.
+## 2. Responsabilidad de servicios
 
-## Funciones Lambda (4 muestras)
+| Servicio | Elección y justificación |
+|---|---|
+| API Gateway HTTP API | Entrada HTTPS con autorización JWT, costo bajo y rutas sencillas |
+| AWS Lambda (4) | Funciones pequeñas sin servidores dedicados; escala por eventos |
+| EventBridge | Desacopla procesamiento de ETA, alertas y archivo |
+| DynamoDB | Lectura/escritura rápida del estado actual por `delivery_id` |
+| S3 | Conserva JSON histórico, organizado por fecha y con cifrado SSE-S3 |
+| RDS PostgreSQL | Propuesta de traslado de tablas relacionales actuales y backups administrados |
+| SNS | Notificación de desvíos y alarmas críticas |
+| CloudWatch | Logs estructurados, indicadores y alarmas |
 
-- `check_delivery_completed`: verifica identidad, estado y fecha.
-- `estimate_eta`: distancia restante / velocidad media (modelo simple, no ML).
-- `detect_route_deviation`: distancia a waypoint, no desvío geométrico real a toda la ruta.
-- `validate_event`: esquema y normalización temporal de un evento.
+**Separación RDS/DynamoDB:** RDS albergaría el histórico operacional relacional migrado; la API móvil utiliza DynamoDB en el camino crítico para no acoplar cada evento a RDS. La sincronización eventual de eventos hacia RDS sería una **extensión futura**, no una característica implementada.
 
-`Scripts/Avance_4/test_lambda_logic.py` las prueba **sin conectar a AWS**.
+## 3. Migración PostgreSQL local -> RDS (procedimiento propuesto)
 
-## Migración y base de datos
+- Crear instancia **RDS PostgreSQL privada**, `db.t4g.micro`, **Single-AZ**, gp3 20 GiB, cifrado al crear, SSL/TLS y grupo de seguridad restringido.
+- Programar ventana de migración; respaldar con `pg_dump -Fc` de `fleetlogix_db`, crear destino y restaurar con `pg_restore` desde una estación con conexión autorizada (túnel temporal/VPN).
+- Validar las seis tablas operacionales (vehicles, drivers, routes, trips, deliveries, maintenance), constraints, conteos y consultas clave. No introducir RDS pública ni un bastión permanente solamente para la entrega.
+- Cambiar la cadena de conexión **solo tras validación**. Mantener copia local de respaldo. RDS con backups automáticos **7 días** y prueba periódica de recuperación.
+- **No ejecutado:** no se provisionaron RDS, redes ni restauraciones reales.
 
-- Migración planeada: `pg_dump` desde PostgreSQL local -> restauración controlada en **RDS for PostgreSQL**, validación de conteos, restricciones y rendimiento; ventana de corte y rollback documentadas. No se ha migrado la BD real.
-- RDS Single-AZ privado, 20 GiB SSD, cifrado administrado, backups automáticos (p.ej. 7 días), acceso desde funciones autorizadas en VPC.
-- DynamoDB: clave de partición `delivery_id`, atributo `event_id`, estado, timestamp y ubicación aproximada; TTL solo para datos transitorios si aplica.
-- S3: cifrado SSE-S3, bloqueo de acceso público, versionado según retención deseada y política de ciclo de vida.
+## 4. Monitoreo y alertas
 
-## IAM y seguridad
+| Indicador | Alerta propuesta | Motivo |
+|---|---|---|
+| API Gateway `5xx`, latencia p95 | 5xx > 5 por 5 min; p95 > 2 s | Fallos y experiencia móvil |
+| Lambda `Errors`, `Throttles`, duración | Error > 1 % en 5 min | Eventos que no se procesan |
+| DynamoDB `ThrottledRequests` | > 0 en 5 min | Estado no actualizado |
+| RDS `CPUUtilization`, `FreeStorageSpace` | CPU > 80 % por 15 min; disco < 2 GiB | Saturación / continuidad |
+| Desvío de ruta > 2 km | Evento SNS por entrega | Respuesta operativa |
+| S3 / eventos archivados vs recibidos | Diferencia en conteos al cierre diario | Detectar eventos faltantes |
 
-- Nunca usar usuario root; roles de IAM separados para Lambda API, Lambda batch y auditoría.
-- Permisos mínimos por recurso: escritura solamente en tabla DynamoDB y prefijo S3 correspondiente; batch con lectura S3 y acceso limitado a RDS.
-- API Gateway con autorización JWT/Cognito (diseño), validación de entradas, cuotas y throttling.
-- Secrets Manager para contraseña RDS, no variables de entorno en texto.
-- CloudWatch Logs con retención explícita; sin PII en logs operativos.
+Retención de logs 14 días; no registrar direcciones de clientes, tokens ni coordenadas precisas en logs. Alarmas -> SNS/email de operaciones. Configurar un presupuesto AWS de US$40/mes y aviso al 80 %.
 
-## Monitoreo
+## 5. Seguridad y copias
 
-- `APIGateway 4XXError/5XXError/Latency` -> advertencias si crecen fallas o latencia.
-- `Lambda Errors/Throttles/Duration` -> alertas por fallos y tiempos de ejecución.
-- `DynamoDB ThrottledRequests` y errores de escritura -> alertas de capacidad.
-- `RDS CPUUtilization/FreeStorageSpace/DatabaseConnections` -> alertas operativas.
-- Evento de desvío mayor a 2 km, entrega atrasada o fallo de conciliación -> métricas personalizadas.
-- CloudWatch Alarm -> SNS/email autorizado (diseño).
+- **IAM:** usar identidad personal IAM Identity Center o usuario IAM no root, MFA; roles Lambda separados por función, con permisos `dynamodb`, `events:PutEvents`, `s3:PutObject` o `sns:Publish` limitados a recursos específicos. No almacenar credenciales AWS en código.
+- **API:** authorizer JWT, HTTPS, validación de payload, throttling y control de tamaño.
+- **Cifrado:** RDS at rest (KMS, habilitado desde creación); DynamoDB cifrado por defecto; S3 SSE-S3, Block Public Access; TLS en tránsito.
+- **Backups:** RDS automatizados 7 días, restauración documentada; versionado y retención S3 según requisitos; PITR DynamoDB opcional, no incluido en presupuesto.
+- **Aislamiento:** RDS en subred privada, sin IPv4 público; las Lambdas del flujo principal no requieren VPC ni NAT Gateway. Acceso a RDS solamente durante tareas administradas de migración o mantenimiento.
 
-## Presupuesto teórico mensual (USD, escenario de laboratorio)
+## 6. Presupuesto mensual teórico
 
-**Supuestos:** 100.000 eventos al mes, Lambda 128 MB/250 ms, DynamoDB menos de 1 GB, S3 5 GB, RDS PostgreSQL `db.t4g.micro` Single-AZ encendida 730 horas y 20 GiB. Sin NAT Gateway, load balancer, Multi-AZ ni grandes transferencias externas. Tarifas orientativas; las variables dependen de región, impuestos, backups, acceso a red y créditos Free Tier.
+**Escenario:** 50.000 eventos y solicitudes API al mes; 200.000 invocaciones Lambda (fan-out), 5 GB S3, 20 GiB RDS SSD, una única RDS `db.t4g.micro` encendida 730 h, menos de 1 GB DynamoDB, logs bajos, sin cargas masivas de salida. **No se aplican créditos ni descuentos Free Tier.**
 
-| Recurso | Supuesto | Estimado USD/mes |
-|---|---|---:|
-| RDS instancia | db.t4g.micro, 730 h × $0.016 | 11.68 |
-| RDS almacenamiento y backup adicional | 20 GiB SSD y margen | 3.50 |
-| API Gateway HTTP API | 0.1 millones de solicitudes | 0.10 |
-| Lambda | 0.1 millones, 128 MB/250 ms | 0.25 |
-| DynamoDB | lecturas/escrituras+1 GB | 1.00 |
-| S3 | 5 GB + solicitudes | 0.30 |
-| CloudWatch, SNS, Secrets Manager | bajo volumen | 3.00 |
-| Transferencia/variación | reserva académica | 5.00 |
-| **TOTAL ESTIMADO** | **sin descuentos Free Tier** | **24.83** |
+| Partida | USD/mes |
+|---|---:|
+| RDS PostgreSQL, instancia | 11.68 |
+| RDS PostgreSQL, SSD gp3 | 2.30 |
+| Backups RDS | 0.00 |
+| API Gateway HTTP | 0.05 |
+| AWS Lambda | 0.30 |
+| DynamoDB | 0.30 |
+| Amazon S3 | 0.37 |
+| EventBridge | 0.05 |
+| SNS | 0.05 |
+| CloudWatch | 2.00 |
+| Transferencia | 1.00 |
+| Contingencia | 5.00 |
+| **TOTAL PROYECTADO** | **23.10** |
 
-**Restricción solicitada: US$50/mes.** Este escenario teórico **cabe debajo del límite**, pero no es un presupuesto garantizado. Recalcular con [AWS Pricing Calculator](https://calculator.aws/) antes de desplegar. Un NAT Gateway o Multi-AZ podrían romper el límite.
+**Advertencia:** presupuesto ilustrativo, no cotización ni factura. Puede superar US$50 con Multi-AZ, NAT Gateway, bastión siempre encendido, AWS DMS, secretos administrados, alta transferencia, uso real superior o copias extra. Recalcular en [AWS Pricing Calculator](https://calculator.aws/) y activar AWS Budgets **antes** de desplegar.
 
-Fuentes: [RDS](https://aws.amazon.com/rds/postgresql/pricing/), [Lambda](https://aws.amazon.com/lambda/pricing/), [API Gateway](https://aws.amazon.com/api-gateway/pricing/), [DynamoDB](https://aws.amazon.com/dynamodb/pricing/), [S3](https://aws.amazon.com/s3/pricing/).
+## 7. Evidencia de implementación académica y límites
 
-## Estado
+Se entregan cuatro handlers Lambda con llamadas `boto3` preparadas, y una simulación local que prueba actualización de estado casi inmediata, ETA, alerta, archivo y deduplicación. Ningún recurso AWS fue creado y ninguna aplicación móvil real fue conectada.
 
-Incluidos: arquitectura documentada, diagrama editable y PNG, 4 funciones y pruebas offline, controles y costos teóricos. **No incluido:** aprovisionamiento real de recursos AWS, migración efectiva de PostgreSQL, eventos reales ni puesta en servicio. La consigna del avance prioriza comprender y documentar el diseño.
+En un despliegue real, las escrituras DynamoDB y la publicación EventBridge no son transaccionales en conjunto; se requiere patrón outbox, reintentos y reconciliación. El detector de desvío a waypoint y ETA simplificado son **aproximaciones educativas**. La disponibilidad de RDS Single-AZ no está garantizada ante fallos de zona.
+
+## Fuentes de referencia
+
+- AWS RDS: https://aws.amazon.com/rds/postgresql/pricing/
+- AWS Lambda: https://aws.amazon.com/lambda/pricing/
+- AWS HTTP API: https://aws.amazon.com/api-gateway/pricing/
+- AWS DynamoDB: https://aws.amazon.com/dynamodb/pricing/
+- AWS S3: https://aws.amazon.com/s3/pricing/
+- AWS CloudWatch: https://aws.amazon.com/cloudwatch/pricing/
+- AWS Pricing Calculator: https://calculator.aws/
+- AWS API Gateway JWT: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html
+- AWS RDS backups: https://docs.aws.amazon.com/AmazonRDS/latest/gettingstartedguide/managing-backup-restore.html
