@@ -1,6 +1,30 @@
-.venv/
+# Entorno y credenciales
 .env
+.env.*
+!.env.example
+.venv/
+venv/
 __pycache__/
-logs/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Salidas locales y datos intermedios
 data/
+logs/
+*.log
+*.tmp
+*.bak
+
+# Notebook y sistema operativo
 .ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+
+# Claves y credenciales privadas
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
